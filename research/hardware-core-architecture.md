@@ -59,4 +59,5 @@ where one device response spans two USB transfers.
 2. **Done:** `CubeBabySession` / `CubeBabyLink` (open ports once, serialize requests).
 3. **Done:** `FakeCubeBabyTransport` + API integration tests (bank / live / IR / session).
 4. **Done:** `@tonehub/midi-transport-web` + `@tonehub/midi-transport-native` (host contract).
-5. **Product (separate):** UI / accounts / cloud + platform MIDI plugins — out of this hardware-core repo.
+5. **Product (separate repo):** `../tonehub-app` — Expo/TypeScript UI + native MIDI plugins.
+   Consumes this core via pnpm workspace link; does not reimplement protocol.
