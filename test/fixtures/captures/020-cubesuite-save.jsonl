@@ -1,0 +1,7 @@
+{"type":"tonehub-midi-capture","version":1,"createdAt":"2026-08-09T03:09:11.046Z","sourceExperiment":"020-cubesuite-save"}
+{"sequence":1,"type":"message","direction":"host-to-device","receivedAtMs":40424.965000000004,"dataHex":"f000320949000040020500000018000000642000f7"}
+{"sequence":2,"type":"message","direction":"device-to-host","receivedAtMs":40467.55,"dataHex":"f000320108000000007f01f7"}
+{"sequence":3,"type":"message","direction":"host-to-device","receivedAtMs":41329.405999999995,"dataHex":"f00032094103004002000000000006000005060c305000590207102008102000000000141840404120733040420021400001000000600040010a32115a20014202010204000000400df7"}
+{"sequence":4,"type":"message","direction":"device-to-host","receivedAtMs":41369.444,"dataHex":"f000320108000000007f01f7"}
+{"sequence":5,"type":"message","direction":"host-to-device","receivedAtMs":41371.369999999995,"dataHex":"f000320d410000400200000000000600004a01f7"}
+{"sequence":6,"type":"message","direction":"device-to-host","receivedAtMs":41419.429000000004,"dataHex":"f000320d4103004002000000000006000005060c305000590207102008102000000000141840404120733040420021400001000000600040010a32115a20014202010204000000400df7"}

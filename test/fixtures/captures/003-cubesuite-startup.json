@@ -1,0 +1,77 @@
+{
+  "schema": "tonehub.usb-midi-fixture",
+  "version": 1,
+  "source": {
+    "experiment": "003-cubesuite-startup",
+    "sha256": "4de062061953fe36f09a6811908ab1834a3df84572d2b0b2c5f4121b77d24e05",
+    "usbAddress": 11
+  },
+  "transfers": [
+    {
+      "frame": 7,
+      "atSeconds": 97.964568,
+      "direction": "host-to-device",
+      "capdata": "04f00032044500000400407f05f70000"
+    },
+    {
+      "frame": 9,
+      "atSeconds": 97.978712,
+      "direction": "device-to-host",
+      "capdata": "04f00032044558010400402904491c0d047a546504503a62044a090a04262c1e04102040040001120460040a04152c5c044011430607f700"
+    },
+    {
+      "frame": 11,
+      "atSeconds": 97.980561,
+      "direction": "host-to-device",
+      "capdata": "04f00032040d41000400000004004200040040020400004a0601f700"
+    },
+    {
+      "frame": 13,
+      "atSeconds": 98.029751,
+      "direction": "device-to-host",
+      "capdata": "04f00032040d6101040000000400420004004002040000010400000004606013040000000400180004000000040600000400690007406af7"
+    },
+    {
+      "frame": 15,
+      "atSeconds": 98.03147,
+      "direction": "host-to-device",
+      "capdata": "04f00032044900000400407f05f74200"
+    },
+    {
+      "frame": 17,
+      "atSeconds": 98.080728,
+      "direction": "device-to-host",
+      "capdata": "04f0003204493000040040000400000004000040063ff700"
+    },
+    {
+      "frame": 19,
+      "atSeconds": 100.329034,
+      "direction": "host-to-device",
+      "capdata": "04f00032040d41000400400204000000040000060400004a0601f700"
+    },
+    {
+      "frame": 21,
+      "atSeconds": 100.330727,
+      "direction": "device-to-host",
+      "capdata": "04f00032040d41030400400204000000040000060400000504060c30045060580402071004200810042000000400001404184040044120730430404204002140"
+    },
+    {
+      "frame": 23,
+      "atSeconds": 100.331729,
+      "direction": "device-to-host",
+      "capdata": "040001000400006004004001040a3211045a2001044202010402040004000000060ef700"
+    },
+    {
+      "frame": 25,
+      "atSeconds": 100.353411,
+      "direction": "host-to-device",
+      "capdata": "04f00032040d41000400000004006000040010000400004e0601f700"
+    },
+    {
+      "frame": 27,
+      "atSeconds": 100.379765,
+      "direction": "device-to-host",
+      "capdata": "04f00032040d490004000000040060000400100004000001071a03f7"
+    }
+  ]
+}

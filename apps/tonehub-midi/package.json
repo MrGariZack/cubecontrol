@@ -1,0 +1,25 @@
+{
+  "name": "@tonehub/midi-cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "tonehub-midi": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "start": "node dist/cli.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@tonehub/cube-baby-api": "workspace:*",
+    "@tonehub/cube-baby-protocol": "workspace:*",
+    "@tonehub/midi-core": "workspace:*",
+    "@tonehub/midi-transport-node": "workspace:*",
+    "commander": "latest"
+  },
+  "devDependencies": {
+    "tsx": "latest"
+  }
+}

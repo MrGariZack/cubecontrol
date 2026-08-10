@@ -1,0 +1,28 @@
+{
+  "name": "tonehub",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hardware-first MIDI research core for ToneHub",
+  "packageManager": "pnpm@10.34.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "lint": "biome lint .",
+    "typecheck": "pnpm build && pnpm -r --if-present typecheck",
+    "test": "vitest run",
+    "tonehub-midi": "tsx apps/tonehub-midi/src/cli.ts"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "latest",
+    "@types/node": "latest",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}

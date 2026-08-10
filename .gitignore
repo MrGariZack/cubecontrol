@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+
+# Reference projects are local research inputs, not vendored source.
+research/upstream/
+
+# Raw captures may contain device-specific data. Curated fixtures are tracked.
+research/captures/**/*.syx
+research/captures/**/*.mid
+research/captures/**/*.bin
+research/captures/**/*.jsonl
+!research/captures/**/.gitkeep
+!test/fixtures/captures/**

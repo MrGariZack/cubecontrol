@@ -1,0 +1,17 @@
+{"type":"tonehub-midi-capture","version":1,"createdAt":"2026-08-08T20:43:36.708Z","sourceExperiment":"017-parameter-tone-section"}
+{"sequence":1,"type":"message","direction":"host-to-device","receivedAtMs":23836.23,"dataHex":"f000320949000040020c00000018000000005a01f7"}
+{"sequence":2,"type":"message","direction":"device-to-host","receivedAtMs":23870.135000000002,"dataHex":"f000320108000000007f01f7"}
+{"sequence":3,"type":"message","direction":"host-to-device","receivedAtMs":24370.191,"dataHex":"f000320949000040020c00000018000000015801f7"}
+{"sequence":4,"type":"message","direction":"device-to-host","receivedAtMs":24418.040999999997,"dataHex":"f000320108000000007f01f7"}
+{"sequence":5,"type":"message","direction":"host-to-device","receivedAtMs":24876.003999999997,"dataHex":"f000320949000040020c00000018000000005a01f7"}
+{"sequence":6,"type":"message","direction":"device-to-host","receivedAtMs":24918.124,"dataHex":"f000320108000000007f01f7"}
+{"sequence":7,"type":"message","direction":"host-to-device","receivedAtMs":25310.889,"dataHex":"f000320949000040020c00000018000000015801f7"}
+{"sequence":8,"type":"message","direction":"device-to-host","receivedAtMs":25318.124,"dataHex":"f000320108000000007f01f7"}
+{"sequence":9,"type":"message","direction":"host-to-device","receivedAtMs":25724.714,"dataHex":"f000320949000040020c00000018000000005a01f7"}
+{"sequence":10,"type":"message","direction":"device-to-host","receivedAtMs":25769.005,"dataHex":"f000320108000000007f01f7"}
+{"sequence":11,"type":"message","direction":"host-to-device","receivedAtMs":26183.965,"dataHex":"f000320949000040020c00000018000000015801f7"}
+{"sequence":12,"type":"message","direction":"device-to-host","receivedAtMs":26218.095999999998,"dataHex":"f000320108000000007f01f7"}
+{"sequence":13,"type":"message","direction":"host-to-device","receivedAtMs":26630.322,"dataHex":"f000320949000040020c00000018000000005a01f7"}
+{"sequence":14,"type":"message","direction":"device-to-host","receivedAtMs":26669.988,"dataHex":"f000320108000000007f01f7"}
+{"sequence":15,"type":"message","direction":"host-to-device","receivedAtMs":27092.82,"dataHex":"f000320949000040020c00000018000000015801f7"}
+{"sequence":16,"type":"message","direction":"device-to-host","receivedAtMs":27118.984,"dataHex":"f000320108000000007f01f7"}

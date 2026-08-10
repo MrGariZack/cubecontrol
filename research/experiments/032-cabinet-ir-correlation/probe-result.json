@@ -1,0 +1,180 @@
+{
+  "restoreCabinet": 8,
+  "bankCabinets": [
+    {
+      "slot": "A",
+      "cabinet": 8
+    },
+    {
+      "slot": "B",
+      "cabinet": 8
+    },
+    {
+      "slot": "C",
+      "cabinet": 5
+    }
+  ],
+  "baseline": {
+    "livePrefixHex": "0000003f000000000000d0350000a036",
+    "bestSlot": 7,
+    "matched": 60
+  },
+  "roms": [
+    {
+      "slotIndex": 0,
+      "addressHex": "0x69000",
+      "headerHex": "000000000000003f801405bc802ffdbc"
+    },
+    {
+      "slotIndex": 1,
+      "addressHex": "0x6a000",
+      "headerHex": "01000000d7a3303f00c8b93e00d2613f"
+    },
+    {
+      "slotIndex": 2,
+      "addressHex": "0x6b000",
+      "headerHex": "010000003333333f006e483f00967d3f"
+    },
+    {
+      "slotIndex": 3,
+      "addressHex": "0x6c000",
+      "headerHex": "01000000a4703d3f0e1d873e497b243f"
+    },
+    {
+      "slotIndex": 4,
+      "addressHex": "0x6d000",
+      "headerHex": "01000000a4703d3f00b0263e00e4f63e"
+    },
+    {
+      "slotIndex": 5,
+      "addressHex": "0x6e000",
+      "headerHex": "01000000a4703d3f0040673e004e0c3f"
+    },
+    {
+      "slotIndex": 6,
+      "addressHex": "0x6f000",
+      "headerHex": "000000000000003f000000000000a035"
+    },
+    {
+      "slotIndex": 7,
+      "addressHex": "0x70000",
+      "headerHex": "000000000000003f000000000000d035"
+    }
+  ],
+  "sweeps": [
+    {
+      "cabinet": 0,
+      "livePrefixHex": "0000003f000000000000d0350000a036",
+      "bestSlot": 7,
+      "matched": 60,
+      "total": 60,
+      "liveChangedFromBaseline": false
+    },
+    {
+      "cabinet": 1,
+      "livePrefixHex": "0000003f801405bc802ffdbc8046c9bd",
+      "bestSlot": 0,
+      "matched": 60,
+      "total": 60,
+      "liveChangedFromBaseline": true
+    },
+    {
+      "cabinet": 2,
+      "livePrefixHex": "d7a3303f00c8b93e00d2613f00987a3f",
+      "bestSlot": 1,
+      "matched": 60,
+      "total": 60,
+      "liveChangedFromBaseline": true
+    },
+    {
+      "cabinet": 3,
+      "livePrefixHex": "3333333f006e483f00967d3f00c0103f",
+      "bestSlot": 2,
+      "matched": 60,
+      "total": 60,
+      "liveChangedFromBaseline": true
+    },
+    {
+      "cabinet": 4,
+      "livePrefixHex": "a4703d3f0e1d873e497b243f95894a3f",
+      "bestSlot": 3,
+      "matched": 60,
+      "total": 60,
+      "liveChangedFromBaseline": true
+    },
+    {
+      "cabinet": 5,
+      "livePrefixHex": "a4703d3f00b0263e00e4f63e00d8473f",
+      "bestSlot": 4,
+      "matched": 60,
+      "total": 60,
+      "liveChangedFromBaseline": true
+    },
+    {
+      "cabinet": 6,
+      "livePrefixHex": "a4703d3f0040673e004e0c3f006c4a3f",
+      "bestSlot": 5,
+      "matched": 60,
+      "total": 60,
+      "liveChangedFromBaseline": true
+    },
+    {
+      "cabinet": 7,
+      "livePrefixHex": "0000003f000000000000a03500006836",
+      "bestSlot": 6,
+      "matched": 60,
+      "total": 60,
+      "liveChangedFromBaseline": true
+    },
+    {
+      "cabinet": 8,
+      "livePrefixHex": "0000003f000000000000d0350000a036",
+      "bestSlot": 7,
+      "matched": 60,
+      "total": 60,
+      "liveChangedFromBaseline": false
+    }
+  ],
+  "summary": {
+    "anyLiveIrChangeAcrossCabinetSweep": true,
+    "perfectMatches": [
+      {
+        "cabinet": 0,
+        "romSlot": 7
+      },
+      {
+        "cabinet": 1,
+        "romSlot": 0
+      },
+      {
+        "cabinet": 2,
+        "romSlot": 1
+      },
+      {
+        "cabinet": 3,
+        "romSlot": 2
+      },
+      {
+        "cabinet": 4,
+        "romSlot": 3
+      },
+      {
+        "cabinet": 5,
+        "romSlot": 4
+      },
+      {
+        "cabinet": 6,
+        "romSlot": 5
+      },
+      {
+        "cabinet": 7,
+        "romSlot": 6
+      },
+      {
+        "cabinet": 8,
+        "romSlot": 7
+      }
+    ]
+  },
+  "observedAt": "2026-08-10T19:21:58.993Z"
+}
