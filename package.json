@@ -1,6 +1,6 @@
 {
   "name": "tonehub",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Hardware-first MIDI research core for ToneHub",
@@ -16,8 +16,7 @@
     "lint": "biome lint .",
     "typecheck": "pnpm build && pnpm -r --if-present typecheck",
     "test": "vitest run",
-    "tonehub-midi": "tsx apps/tonehub-midi/src/cli.ts",
-    "tonehub-midi:probe-sections": "tsx apps/tonehub-midi/src/probe-sections.ts"
+    "tonehub-midi": "tsx apps/tonehub-midi/src/cli.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "latest",

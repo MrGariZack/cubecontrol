@@ -1,14 +1,22 @@
 # ToneHub Hardware Core
 
-ToneHub starts as a hardware research project for the M-VAVE/Cuvave CUBE Baby.
+USB-MIDI protocol library and CLI for the M-VAVE/Cuvave **CUBE Baby**.  
+No product UI here — that is **CubeControl**: [cubecontrol-app](https://github.com/MrGariZack/cubecontrol-app).
+
+| | |
+|--|--|
+| **This repo** | https://github.com/MrGariZack/cubecontrol |
+| **Desktop app** | https://github.com/MrGariZack/cubecontrol-app |
+| **Version** | `0.1.0` — [`CHANGELOG.md`](CHANGELOG.md) |
+| **License** | MIT — [`LICENSE`](LICENSE) |
+
 This repository intentionally contains no application UI, backend, authentication, marketplace,
 or community features.
 
 ## Safety boundary
 
-The diagnostic CLI is passive by default. The first milestones only enumerate and monitor MIDI
-ports. Unknown or destructive SysEx commands must not be transmitted. Every protocol conclusion
-must be tied to a reproducible capture and a documented confidence level.
+The diagnostic CLI is passive by default. Unknown or destructive SysEx commands must not be
+transmitted without explicit `--confirm-*` flags. Use at your own risk; not affiliated with M-VAVE.
 
 ## Requirements
 
