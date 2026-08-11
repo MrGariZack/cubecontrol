@@ -24,13 +24,13 @@ pnpm check
 pnpm build
 pnpm tonehub-midi list
 pnpm tonehub-midi monitor --input node:input:0
-pnpm tonehub-midi capture research/captures/session.jsonl --input node:input:0
+pnpm tonehub-midi capture ./captures/session.jsonl --input node:input:0
 pnpm tonehub-midi decode test/fixtures/captures/003-cubesuite-startup.jsonl
 pnpm tonehub-midi compare capture-a.jsonl capture-b.jsonl
 ```
 
-Development references are cloned under `research/upstream/` and intentionally ignored by Git.
-Their code is not part of ToneHub.
+Local protocol lab notes and USB captures live under `research/` on your machine and are
+**gitignored** — this repo ships the library, CLI, and fixtures only.
 
 Transmitting commands require explicit confirmation flags. Identity and ReadMemory are allowed:
 
@@ -130,7 +130,7 @@ pnpm tonehub-midi dump-ir-rom \
   --input node:input:0 \
   --output node:output:1 \
   --slot 7 \
-  --file research/experiments/030-ir-rom-slot-dump/slot-7.bin \
+  --file ./slot-7.bin \
   --confirm-read-only --json
 ```
 
@@ -150,7 +150,7 @@ Convert a WAV impulse to an IR sector (optional ROM persist + Cabinet select):
 ```sh
 pnpm tonehub-midi import-ir-wav \
   --file test/fixtures/ir/033-tonehub-impulse.wav \
-  --out research/experiments/033-import-ir-wav/imported-sector.bin \
+  --out ./imported-sector.bin \
   --input node:input:0 \
   --output node:output:1 \
   --slot 7 \
@@ -168,7 +168,7 @@ pnpm tonehub-midi export-ir-wav \
   --input node:input:0 \
   --output node:output:1 \
   --slot 1 \
-  --out research/experiments/034-export-ir-wav/slot-1.wav \
+  --out ./slot-1.wav \
   --confirm-read-only --json
 ```
 
@@ -179,7 +179,7 @@ pnpm tonehub-midi load-ir \
   --input node:input:0 \
   --output node:output:1 \
   --file test/fixtures/ir/033-tonehub-impulse.wav \
-  --backup research/experiments/035-load-ir/backup-slot-7.bin \
+  --backup ./backup-slot-7.bin \
   --confirm-load --json
 ```
 
@@ -192,3 +192,8 @@ pnpm tonehub-midi load-ir \
 - `@tonehub/cube-baby-protocol`: pure SysEx codec + preset/IR helpers.
 - `@tonehub/cube-baby-api`: device operations + session (`CubeBabySession`).
 - `@tonehub/midi-cli`: diagnostic command-line application.
+
+## Product UI
+
+Application UI (**CubeControl**) lives in the sibling repo `../tonehub-app`.  
+Open-core / cloud boundary for the product: `../tonehub-app/docs/open-core.md`.

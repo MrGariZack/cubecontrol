@@ -2,10 +2,10 @@ import { CubeBabyClient } from "@tonehub/cube-baby-api";
 import type { MidiTransport } from "@tonehub/midi-core";
 import { bytesToCompactHex } from "../format.js";
 
-/** Live parameter RAM window confirmed by experiments 004–017. */
+/** Live parameter RAM window: three slot bands × 16 bytes (exp. 038) → 0x00..0x2c. */
 const LIVE_MEMORY = 5;
 const LIVE_BASE = 0x8000_0000;
-const LIVE_MAX_OFFSET = 12;
+const LIVE_MAX_OFFSET = 0x2c;
 
 export interface WriteMemoryOptions {
   readonly input: string;
@@ -62,9 +62,13 @@ export async function writeMemoryCommand(
   if (memory !== LIVE_MEMORY) {
     throw new Error(`--memory must be ${LIVE_MEMORY} for the approved live-parameter window`);
   }
-  if (address < LIVE_BASE || address > LIVE_BASE + LIVE_MAX_OFFSET) {
+  const offset = address - LIVE_BASE;
+  const within = offset % 16;
+  const inSlotField = within >= 0 && within <= 12;
+  if (address < LIVE_BASE || offset > LIVE_MAX_OFFSET || !inSlotField) {
     throw new Error(
-      `--address must be in 0x${LIVE_BASE.toString(16)}..0x${(LIVE_BASE + LIVE_MAX_OFFSET).toString(16)} (live params only)`,
+      `--address must be live slot bands 0x${LIVE_BASE.toString(16)}..0x${(LIVE_BASE + LIVE_MAX_OFFSET).toString(16)} ` +
+        `(within each 16-byte slot, field offsets 0..12)`,
     );
   }
   if (data.length !== 1) {

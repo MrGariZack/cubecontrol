@@ -220,8 +220,13 @@ export interface WriteLiveParamOptions {
   readonly outputPortId: string;
   /** Named live field, or use `offset`. */
   readonly param?: LiveParamName;
-  /** Raw offset 0..12 when not using `param`. */
+  /** Within-slot offset 0..12 when not using `param`. */
   readonly offset?: number;
+  /**
+   * Active preset foot A/B/C → 0/1/2. Live address = slotIndex*16 + field offset
+   * (exp. 038). Default 0 (slot A).
+   */
+  readonly slotIndex?: number;
   readonly value: number;
   readonly timeoutMs?: number;
   readonly handshake?: boolean;
@@ -232,6 +237,8 @@ export interface SelectCabinetOptions {
   readonly outputPortId: string;
   /** Cabinet value 0..8. */
   readonly cabinet: number;
+  /** Preset slot band for the cabinet live byte (default 0 = A). */
+  readonly slotIndex?: number;
   /**
    * When true (default), write a different Cabinet first so firmware reloads IR RAM
    * even if the target value was already selected (experiment 033/035).

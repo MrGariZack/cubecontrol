@@ -27,11 +27,13 @@ import {
   irRomSlotAddress,
   liveParamAddress,
   LIVE_PARAM_MEMORY,
+  type LiveParamName,
   prepareIrSamples,
   PRESET_BANK_BYTE_LENGTH,
   PRESET_SLOT_BYTE_LENGTH,
   type CubeBabyPresetBank,
 } from "@tonehub/cube-baby-protocol";
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { MidiTransport } from "@tonehub/midi-core";
 import {
   CubeBabyReadTimeoutError,
@@ -73,9 +75,15 @@ const BANK_ADDRESS = 0x0000_0000;
 const LIVE_BASE = 0x8000_0000;
 const STEP_GAP_MS = 250;
 
+/**
+ * Link held by the current async chain inside `runExclusive`.
+ * AsyncLocalStorage (not a field) so concurrent callers cannot steal re-entry
+ * and hit `exchange already in progress` mid-op.
+ */
+const linkContext = new AsyncLocalStorage<CubeBabyLink>();
+
 export class CubeBabyClient {
   #sessionLink: CubeBabyLink | undefined;
-  #activeLink: CubeBabyLink | undefined;
 
   constructor(private readonly transport: MidiTransport) {}
 
@@ -98,16 +106,16 @@ export class CubeBabyClient {
   async disconnect(): Promise<void> {
     const link = this.#sessionLink;
     this.#sessionLink = undefined;
-    this.#activeLink = undefined;
     if (link !== undefined) await link.close();
   }
 
   async #withLink<T>(ports: CubeBabyLinkPorts, fn: (link: CubeBabyLink) => Promise<T>): Promise<T> {
-    if (this.#activeLink !== undefined) {
-      if (!this.#activeLink.samePorts(ports)) {
+    const inherited = linkContext.getStore();
+    if (inherited !== undefined) {
+      if (!inherited.samePorts(ports)) {
         throw new CubeBabySessionPortMismatchError();
       }
-      return fn(this.#activeLink);
+      return fn(inherited);
     }
 
     if (this.#sessionLink !== undefined) {
@@ -115,26 +123,12 @@ export class CubeBabyClient {
         throw new CubeBabySessionPortMismatchError();
       }
       const session = this.#sessionLink;
-      return session.runExclusive(async () => {
-        this.#activeLink = session;
-        try {
-          return await fn(session);
-        } finally {
-          this.#activeLink = undefined;
-        }
-      });
+      return session.runExclusive(() => linkContext.run(session, () => fn(session)));
     }
 
     const link = await CubeBabyLink.open(this.transport, ports);
     try {
-      return await link.runExclusive(async () => {
-        this.#activeLink = link;
-        try {
-          return await fn(link);
-        } finally {
-          this.#activeLink = undefined;
-        }
-      });
+      return await link.runExclusive(() => linkContext.run(link, () => fn(link)));
     } finally {
       await link.close();
     }
@@ -421,10 +415,11 @@ export class CubeBabyClient {
       const liveAcks: { offset: number; accepted: boolean; rawValue: number }[] = [];
       for (let offset = 0; offset <= 12; offset += 1) {
         const value = written[slotStart + offset] ?? 0;
+        // Live RAM mirrors bank slots at +0x10 per foot (exp. 038).
         const ack = await this.writeMemory({
           ...ports,
           memory: BANK_MEMORY,
-          address: LIVE_BASE + offset,
+          address: LIVE_BASE + slotStart + offset,
           data: Uint8Array.of(value),
           handshake: false,
         });
@@ -433,16 +428,29 @@ export class CubeBabyClient {
       }
       await sleep(STEP_GAP_MS);
 
-      const after = await this.readMemory({
+      // Pedal sometimes needs a beat before bank readback matches; one retry.
+      let after = await this.readMemory({
         ...ports,
         memory: BANK_MEMORY,
         address: BANK_ADDRESS,
         length: PRESET_BANK_BYTE_LENGTH,
         handshake: false,
       });
-
-      const verified =
+      let verified =
         after.data.length === written.length && after.data.every((byte, i) => byte === written[i]);
+      if (!verified) {
+        await sleep(STEP_GAP_MS);
+        after = await this.readMemory({
+          ...ports,
+          memory: BANK_MEMORY,
+          address: BANK_ADDRESS,
+          length: PRESET_BANK_BYTE_LENGTH,
+          handshake: false,
+        });
+        verified =
+          after.data.length === written.length &&
+          after.data.every((byte, i) => byte === written[i]);
+      }
 
       return {
         before: before.data.slice(),
@@ -746,7 +754,10 @@ export class CubeBabyClient {
     return decodePresetBank(read.data);
   }
 
-  /** Write one live parameter by name or offset (memory 5 / `0x80000000+n`). */
+  /**
+   * Write one live parameter by name or within-slot offset.
+   * Address = `0x80000000 + slotIndex*16 + field` (exp. 038 slot bands).
+   */
   async writeLiveParam(options: WriteLiveParamOptions): Promise<CubeBabyMemoryWriteAck> {
     if (options.param === undefined && options.offset === undefined) {
       throw new Error("writeLiveParam requires param or offset");
@@ -757,10 +768,14 @@ export class CubeBabyClient {
     if (!Number.isInteger(options.value) || options.value < 0 || options.value > 255) {
       throw new Error("value must be an integer 0..255");
     }
+    const slotIndex = options.slotIndex ?? 0;
+    if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 2) {
+      throw new Error("slotIndex must be 0 (A), 1 (B), or 2 (C)");
+    }
     const address =
       options.param !== undefined
-        ? liveParamAddress(options.param)
-        : liveParamAddress(options.offset as number);
+        ? liveParamAddress(options.param, slotIndex)
+        : liveParamAddress(options.offset as number, slotIndex);
     return this.writeMemory({
       inputPortId: options.inputPortId,
       outputPortId: options.outputPortId,
@@ -796,6 +811,7 @@ export class CubeBabyClient {
           param: "cabinet",
           value: nudgedFrom,
           handshake: false,
+          ...(options.slotIndex === undefined ? {} : { slotIndex: options.slotIndex }),
         });
         await sleep(350);
       }
@@ -804,6 +820,7 @@ export class CubeBabyClient {
         param: "cabinet",
         value: options.cabinet,
         handshake: false,
+        ...(options.slotIndex === undefined ? {} : { slotIndex: options.slotIndex }),
       });
       await sleep(350);
       return {

@@ -23,5 +23,8 @@
   "dependencies": {
     "@tonehub/cube-baby-protocol": "workspace:*",
     "@tonehub/midi-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0"
   }
 }

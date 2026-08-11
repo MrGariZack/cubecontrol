@@ -11,6 +11,13 @@ import { getWindowsMidiMetadata, type WindowsMidiMetadata } from "./windows-midi
 
 type OpenConnection = MidiInputConnection | MidiOutputConnection;
 
+/** WinMM drops SysEx if hosts burst; keep a floor between sends. */
+const MIN_SYSEX_GAP_MS = 28;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function portId(direction: "input" | "output", index: number): string {
   return `node:${direction}:${index}`;
 }
@@ -60,6 +67,8 @@ export class NodeMidiTransport implements MidiTransport {
   readonly #listeners = new Set<() => void>();
   #pollTimer: NodeJS.Timeout | undefined;
   #lastFingerprint = "";
+  #sendChain: Promise<unknown> = Promise.resolve();
+  #lastSendAtMs = 0;
 
   async listPorts(): Promise<readonly MidiPort[]> {
     const input = new Input();
@@ -146,7 +155,38 @@ export class NodeMidiTransport implements MidiTransport {
       port,
       send: async (data) => {
         if (closed) throw new Error(`MIDI output is closed: ${requestedPortId}`);
-        output.sendMessage([...data]);
+        const bytes = [...data];
+        const run = this.#sendChain.then(async () => {
+          const elapsed = Date.now() - this.#lastSendAtMs;
+          if (elapsed < MIN_SYSEX_GAP_MS) {
+            await sleep(MIN_SYSEX_GAP_MS - elapsed);
+          }
+          try {
+            output.sendMessage(bytes);
+          } catch (error) {
+            // One calm retry; if WinMM is wedged a second failure must surface.
+            await sleep(120);
+            if (closed) throw error;
+            try {
+              output.sendMessage(bytes);
+            } catch (retryError) {
+              const wrapped = new Error(
+                `MIDI WinMM output failed (${requestedPortId}): ${
+                  retryError instanceof Error ? retryError.message : String(retryError)
+                }`,
+              );
+              (wrapped as Error & { cause?: unknown }).cause = retryError;
+              throw wrapped;
+            }
+          } finally {
+            this.#lastSendAtMs = Date.now();
+          }
+        });
+        this.#sendChain = run.then(
+          () => undefined,
+          () => undefined,
+        );
+        await run;
       },
       close: async () => {
         if (closed) return;

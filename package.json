@@ -16,7 +16,8 @@
     "lint": "biome lint .",
     "typecheck": "pnpm build && pnpm -r --if-present typecheck",
     "test": "vitest run",
-    "tonehub-midi": "tsx apps/tonehub-midi/src/cli.ts"
+    "tonehub-midi": "tsx apps/tonehub-midi/src/cli.ts",
+    "tonehub-midi:probe-sections": "tsx apps/tonehub-midi/src/probe-sections.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "latest",

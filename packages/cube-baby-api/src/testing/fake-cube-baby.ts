@@ -5,6 +5,7 @@ import {
   IR_ROM_FACTORY_BASE,
   IR_ROM_SLOT_SIZE,
   LIVE_PARAM_BASE_ADDRESS,
+  LIVE_PARAM_MAX_OFFSET,
   LIVE_PARAM_MEMORY,
   PRESET_BANK_BYTE_LENGTH,
 } from "@tonehub/cube-baby-protocol";
@@ -58,7 +59,7 @@ export class FakeCubeBabyTransport implements MidiTransport {
   openInputCount = 0;
   openOutputCount = 0;
   readonly bank: Uint8Array;
-  readonly live = new Uint8Array(13);
+  readonly live = new Uint8Array(LIVE_PARAM_MAX_OFFSET + 1);
   readonly irRom: Uint8Array;
   #listener: ((chunk: MidiChunk) => void) | undefined;
 
@@ -67,8 +68,9 @@ export class FakeCubeBabyTransport implements MidiTransport {
     if (this.bank.length !== PRESET_BANK_BYTE_LENGTH) {
       throw new Error(`fake bank must be ${PRESET_BANK_BYTE_LENGTH} bytes`);
     }
-    // Seed live params from slot A.
-    this.live.set(this.bank.subarray(0, 13));
+    // Seed live RAM as three contiguous slot mirrors (A@0x00 B@0x10 C@0x20).
+    // Live window ends at 0x2c (named fields); bank trailing pad bytes 0x2d–0x2f unused.
+    this.live.set(this.bank.subarray(0, Math.min(this.bank.length, this.live.length)));
     this.irRom = options.irRom?.slice() ?? new Uint8Array(IR_ROM_SLOT_SIZE * 8);
   }
 
