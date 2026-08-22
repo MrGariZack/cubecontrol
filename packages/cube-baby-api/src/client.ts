@@ -33,8 +33,8 @@ import {
   PRESET_SLOT_BYTE_LENGTH,
   type CubeBabyPresetBank,
 } from "@tonehub/cube-baby-protocol";
-import { AsyncLocalStorage } from "node:async_hooks";
 import type { MidiTransport } from "@tonehub/midi-core";
+import { createAsyncStore } from "./async-store.js";
 import {
   CubeBabyReadTimeoutError,
   CubeBabySessionPortMismatchError,
@@ -77,10 +77,11 @@ const STEP_GAP_MS = 250;
 
 /**
  * Link held by the current async chain inside `runExclusive`.
- * AsyncLocalStorage (not a field) so concurrent callers cannot steal re-entry
- * and hit `exchange already in progress` mid-op.
+ * Not a field: concurrent callers must not steal re-entry and hit
+ * `exchange already in progress` mid-op. Node uses AsyncLocalStorage;
+ * React Native uses a stack store (no `node:async_hooks`).
  */
-const linkContext = new AsyncLocalStorage<CubeBabyLink>();
+const linkContext = createAsyncStore<CubeBabyLink>();
 
 export class CubeBabyClient {
   #sessionLink: CubeBabyLink | undefined;
