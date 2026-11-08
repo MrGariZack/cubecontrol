@@ -1,10 +1,10 @@
 import {
   LIVE_PARAM_MODULATION_OFF,
   LIVE_PARAM_NAMES,
+  type LiveParamName,
   liveParamAddress,
   liveParamLiveOffset,
   liveParamOffset,
-  type LiveParamName,
 } from "@tonehub/cube-baby-protocol";
 import { describe, expect, it } from "vitest";
 import { CubeBabyClient } from "./client.js";
@@ -117,7 +117,7 @@ describe("section toggles (library, no UI)", () => {
     });
     try {
       const bank = await session.readPresetBank({ ...PORTS });
-      const slotB = bank.slots[1]!;
+      const slotB = bank.slots[1];
       const slotIndex = 1;
       for (const name of LIVE_PARAM_NAMES) {
         if (name === "cabinet") continue;
@@ -158,7 +158,7 @@ describe("section toggles (library, no UI)", () => {
     });
     try {
       const bank = await session.readPresetBank({ ...PORTS });
-      const slotC = bank.slots[2]!;
+      const slotC = bank.slots[2];
       const slotIndex = 2;
       for (const name of LIVE_PARAM_NAMES) {
         if (name === "cabinet") continue;

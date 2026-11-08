@@ -1,5 +1,6 @@
 import {
   buildIrRomSector,
+  type CubeBabyPresetBank,
   cabinetToRomSlot,
   decodePresetBank,
   decodeWavToMonoFloat32,
@@ -25,13 +26,11 @@ import {
   IR_ROM_VERIFY_CHUNK_SIZE,
   irRomSectorToLivePayload,
   irRomSlotAddress,
-  liveParamAddress,
   LIVE_PARAM_MEMORY,
-  type LiveParamName,
-  prepareIrSamples,
+  liveParamAddress,
   PRESET_BANK_BYTE_LENGTH,
   PRESET_SLOT_BYTE_LENGTH,
-  type CubeBabyPresetBank,
+  prepareIrSamples,
 } from "@tonehub/cube-baby-protocol";
 import type { MidiTransport } from "@tonehub/midi-core";
 import {

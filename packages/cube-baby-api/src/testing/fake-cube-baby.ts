@@ -1,4 +1,5 @@
 import {
+  type CubeBabyMessage,
   decodeCubeBabyMessage,
   encodeAckResponse,
   encodeMemoryReadResponse,
@@ -122,7 +123,7 @@ export class FakeCubeBabyTransport implements MidiTransport {
   }
 
   #reply(requestSysex: Uint8Array): void {
-    let message;
+    let message: CubeBabyMessage;
     try {
       message = decodeCubeBabyMessage(requestSysex);
     } catch {
