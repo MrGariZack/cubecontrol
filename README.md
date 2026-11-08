@@ -108,7 +108,7 @@ pnpm tonehub-midi apply-live-ir \
   --confirm-live-ir
 ```
 
-Persist an IR to a ROM slot (default slot 7 / `0x00070000`; 2056 B zero-padded to 4096):
+Persist an IR to an explicitly selected ROM slot (2056 B zero-padded to 4096):
 
 ```sh
 pnpm tonehub-midi persist-ir-rom \
@@ -119,7 +119,7 @@ pnpm tonehub-midi persist-ir-rom \
   --confirm-ir-rom-persist
 ```
 
-Factory cabinets (`--slot 0..6`) also need `--confirm-overwrite-cabinet`. Pass a 4096-byte
+Writing any slot replaces its current IR. Save a dump before writing. Pass a 4096-byte
 dump to restore a sector exactly. Use `--no-pad-sector` only to reproduce CubeSuite’s FF tail.
 
 Scan IR ROM slot headers (read-only; stride `0x1000`, base `0x69000`):
@@ -180,7 +180,7 @@ pnpm tonehub-midi export-ir-wav \
   --confirm-read-only --json
 ```
 
-One-shot load (WAV → upload slot 7 → Cabinet 8):
+One-shot load (WAV → chosen ROM slot → corresponding cabinet after verification):
 
 ```sh
 pnpm tonehub-midi load-ir \
@@ -188,6 +188,7 @@ pnpm tonehub-midi load-ir \
   --output node:output:1 \
   --file test/fixtures/ir/033-tonehub-impulse.wav \
   --backup ./backup-slot-7.bin \
+  --slot 7 \
   --confirm-load --json
 ```
 

@@ -246,7 +246,7 @@ program
   .option("--persist-rom", "Erase+write the ROM slot with the built sector")
   .option("--apply-live", "Write the derived 2052-byte live IR block")
   .option("--confirm-ir-rom-persist", "Confirm ROM erase/write")
-  .option("--confirm-overwrite-cabinet", "Required for --slot 0..6")
+  .option("--confirm-overwrite-cabinet", "Legacy flag accepted for compatibility")
   .option("--confirm-live-ir", "Confirm live IR RAM writes")
   .option("--confirm-write", "Confirm live Cabinet write")
   .option("--json", "Emit machine-readable JSON")
@@ -280,26 +280,26 @@ program
 
 program
   .command("load-ir")
-  .description("One-shot: WAV → persist IR ROM slot (default 7) → select Cabinet (default 8)")
+  .description("One-shot: WAV → write and verify selected IR ROM slot → select cabinet")
   .requiredOption("--input <id>", "Explicit MIDI input port ID")
   .requiredOption("--output <id>", "Explicit MIDI output port ID")
   .requiredOption("--file <path>", "Input .wav (PCM16/24/32 or float32)")
-  .option("--slot <n>", "ROM slot 0..7 (default 7 = upload)", "7")
-  .option("--cabinet <n>", "Live Cabinet after load (default 8)", "8")
+  .requiredOption("--slot <n>", "IR ROM slot to overwrite (0..7)")
+  .option("--cabinet <n>", "Live Cabinet after load (default: selected slot + 1)")
   .option("--volume <f32>", "ROM volume / live distance float", "0.5")
-  .option("--presence <style>", "ROM header style: upload|factory", "upload")
+  .option("--presence <style>", "Override ROM header style: upload|factory")
   .option("--backup <path>", "Dump current ROM slot to this .bin before overwrite")
   .option("--out <path>", "Also write the built 4096-byte sector .bin")
   .option("--timeout <ms>", "Per-step timeout, maximum 10000 ms")
   .option("--confirm-load", "Confirm ROM overwrite + Cabinet select")
-  .option("--confirm-overwrite-cabinet", "Required with --slot 0..6")
+  .option("--confirm-overwrite-cabinet", "Legacy flag accepted for compatibility")
   .option("--json", "Emit machine-readable JSON")
   .action(
     async (options: {
       input: string;
       output: string;
       file: string;
-      slot?: string;
+      slot: string;
       cabinet?: string;
       volume?: string;
       presence?: string;
@@ -350,19 +350,19 @@ program
 
 program
   .command("persist-ir-rom")
-  .description("Erase + write + verify an IR ROM factory slot (default 7 = upload)")
+  .description("Erase, write and verify the selected IR ROM slot")
   .requiredOption("--input <id>", "Explicit MIDI input port ID")
   .requiredOption("--output <id>", "Explicit MIDI output port ID")
   .requiredOption(
     "--file <path>",
     "IR ROM payload (.bin/.hex/JSON): 2056 bytes (zero-padded) or full 4096 sector",
   )
-  .option("--slot <n>", "Factory slot 0..7 (default 7 = upload 0x70000)", "7")
+  .requiredOption("--slot <n>", "IR ROM slot to overwrite (0..7)")
   .option("--timeout <ms>", "Per-step timeout, maximum 10000 ms")
   .option("--confirm-ir-rom-persist", "Confirm erase + ROM rewrite")
   .option(
     "--confirm-overwrite-cabinet",
-    "Required with --slot 0..6 (overwrites a non-upload cabinet)",
+    "Legacy flag accepted for compatibility",
   )
   .option("--no-pad-sector", "Do not zero-pad 2056→4096 (leaves erase tail 0xFF)")
   .option("--json", "Emit machine-readable JSON")
@@ -371,7 +371,7 @@ program
       input: string;
       output: string;
       file: string;
-      slot?: string;
+      slot: string;
       timeout?: string;
       confirmIrRomPersist?: boolean;
       confirmOverwriteCabinet?: boolean;

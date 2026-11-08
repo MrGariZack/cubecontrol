@@ -28,7 +28,6 @@ export interface ImportIrWavCommandOptions {
   readonly applyLive?: boolean;
   readonly persistRom?: boolean;
   readonly confirmIrRomPersist?: boolean;
-  readonly confirmOverwriteCabinet?: boolean;
   readonly confirmLiveIr?: boolean;
   readonly confirmWrite?: boolean;
   readonly json?: boolean;
@@ -103,9 +102,6 @@ export async function importIrWavCommand(
     if (!options.confirmIrRomPersist) {
       throw new Error("Refusing ROM persist without --confirm-ir-rom-persist");
     }
-    if (slotIndex !== 7 && !options.confirmOverwriteCabinet) {
-      throw new Error("Factory ROM slots need --confirm-overwrite-cabinet");
-    }
   }
 
   if (options.applyLive === true && !options.confirmLiveIr) {
@@ -144,6 +140,9 @@ export async function importIrWavCommand(
       padSector: true,
       timeoutMs,
     });
+    if (!result.verified) {
+      throw new Error("IR ROM read-back did not match the written sector. Cabinet selection stopped.");
+    }
     persist = {
       slotIndex: result.slotIndex,
       addressHex: `0x${result.address.toString(16)}`,

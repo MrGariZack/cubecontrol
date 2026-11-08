@@ -35,7 +35,7 @@ Multi-step ops (`dumpIrRom`, `persistIrRom`, `loadIrFromWav`, …) reuse that li
 | `readPresetBank` | Decode A+B+C bank |
 | `writeLiveParam` | Set a live field by name (`gain`, `cabinet`, …) or offset |
 | `selectCabinet` | Set Cabinet with IR-RAM reload nudge |
-| `loadIrFromWav` | WAV → ROM slot → Cabinet (default upload 7 / Cabinet 8) |
+| `loadIrFromWav` | WAV → ROM slot → verified read-back → corresponding cabinet |
 
 ## Testing without hardware
 

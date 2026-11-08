@@ -1,7 +1,10 @@
+import { readFile } from "node:fs/promises";
 import {
   buildIrRomSector,
+  decodeCubeBabyMessage,
   encodeIdentityRequest,
   encodeMemoryWriteRequest,
+  IR_ROM_FACTORY_BASE,
   IR_ROM_SLOT_SIZE,
   liveParamAddress,
 } from "@tonehub/cube-baby-protocol";
@@ -16,6 +19,47 @@ import {
 } from "./testing/fake-cube-baby.js";
 
 describe("CubeBabyClient against FakeCubeBabyTransport", () => {
+  it("does not send any cabinet selection when the IR read-back differs", async () => {
+    class FaultyFlash extends FakeCubeBabyTransport {
+      override async openOutput(portId: string) {
+        const output = await super.openOutput(portId);
+        return {
+          ...output,
+          send: async (data: Uint8Array) => {
+            await output.send(data);
+            const frame = decodeCubeBabyMessage(data);
+            if (
+              frame.kind === "memory-write-request" &&
+              frame.memory === 0 &&
+              frame.address === IR_ROM_FACTORY_BASE
+            ) {
+              this.irRom[0] = (this.irRom[0] ?? 0) ^ 0xff;
+            }
+          },
+        };
+      }
+    }
+    const transport = new FaultyFlash();
+    const client = new CubeBabyClient(transport);
+    const wav = await readFile(
+      new URL("../../../test/fixtures/ir/033-tonehub-impulse.wav", import.meta.url),
+    );
+    await expect(
+      client.loadIrFromWav({
+        inputPortId: FAKE_INPUT.id,
+        outputPortId: FAKE_OUTPUT.id,
+        wav,
+        slotIndex: 0,
+        cabinet: 1,
+      }),
+    ).rejects.toThrow("Cabinet selection stopped");
+    expect(
+      transport.sent.map(decodeCubeBabyMessage).some(
+        (frame) => frame.kind === "memory-write-request" && frame.memory === 5,
+      ),
+    ).toBe(false);
+  }, 15_000);
+
   it("reads and decodes the preset bank", async () => {
     const transport = new FakeCubeBabyTransport();
     const client = new CubeBabyClient(transport);
@@ -113,6 +157,30 @@ describe("CubeBabyClient against FakeCubeBabyTransport", () => {
 });
 
 describe("CubeBabySession against FakeCubeBabyTransport", () => {
+  it("queues a bank read while a multi-step cabinet change is running", async () => {
+    const transport = new FakeCubeBabyTransport();
+    const session = await CubeBabySession.open(transport, {
+      inputPortId: FAKE_INPUT.id,
+      outputPortId: FAKE_OUTPUT.id,
+    });
+    try {
+      const [cabinet, bank] = await Promise.all([
+        session.selectCabinet({ cabinet: 2 }),
+        session.readPresetBank(),
+      ]);
+      expect(cabinet.cabinet).toBe(2);
+      expect(bank.raw).toEqual(FAKE_PRESET_BANK);
+      expect(transport.sent.map((data) => decodeCubeBabyMessage(data).kind)).toEqual([
+        "memory-write-request",
+        "memory-write-request",
+        "identity-request",
+        "memory-read-request",
+      ]);
+    } finally {
+      await session.close();
+    }
+  });
+
   it("selectCabinet nudges then sets cabinet", async () => {
     const transport = new FakeCubeBabyTransport();
     const session = await CubeBabySession.open(transport, {

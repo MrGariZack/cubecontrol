@@ -9,12 +9,10 @@ export interface PersistIrRomCommandOptions {
   readonly input: string;
   readonly output: string;
   readonly file: string;
-  /** Factory slot 0..7; default 7 (upload). */
-  readonly slot?: string;
+  /** Explicit ROM slot 0..7. */
+  readonly slot: string;
   readonly timeout?: string;
   readonly confirmIrRomPersist?: boolean;
-  /** Required when --slot is 0..6 (overwrites a cabinet sector). */
-  readonly confirmOverwriteCabinet?: boolean;
   /**
    * Commander: `--no-pad-sector` → false. Default pads 2056→4096 with zeros.
    */
@@ -65,14 +63,9 @@ export async function persistIrRomCommand(
     );
   }
 
-  const slotIndex = options.slot === undefined ? 7 : Number(options.slot);
-  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 7) {
-    throw new Error("--slot must be an integer 0..7 (7 = upload 0x70000)");
-  }
-  if (slotIndex !== 7 && !options.confirmOverwriteCabinet) {
-    throw new Error(
-      `Refusing slot ${slotIndex}: factory cabinets need --confirm-overwrite-cabinet (upload slot is 7)`,
-    );
+  const slotIndex = Number(options.slot);
+  if (!options.slot?.trim() || !Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 7) {
+    throw new Error("--slot must be an integer 0..7");
   }
 
   const timeoutMs = options.timeout === undefined ? 5_000 : Number(options.timeout);

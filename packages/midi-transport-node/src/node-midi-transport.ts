@@ -45,6 +45,68 @@ function uniqueMetadataByName(
   return unique;
 }
 
+type PortProbe = {
+  getPortCount: () => number;
+  getPortName: (index: number) => string;
+};
+
+/**
+ * WinMM throws from `closePort` when the USB device is already gone, and that
+ * exception is not caught in the native addon — it aborts the process.
+ * Park the object so its destructor never runs `midiInUnprepareHeader`.
+ */
+const parkedInputs: Input[] = [];
+const parkedOutputs: Output[] = [];
+
+function portStillPresent(port: PortProbe, name: string): boolean {
+  try {
+    const count = port.getPortCount();
+    for (let index = 0; index < count; index += 1) {
+      if (port.getPortName(index) === name) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function releaseEnumerator(port: { closePort: () => void; destroy: () => void }): void {
+  try {
+    port.closePort();
+  } catch {
+    // Already closed.
+  }
+  try {
+    port.destroy();
+  } catch {
+    // Native handle already released.
+  }
+}
+
+/**
+ * RtMidi picks an API in the constructor and keeps it. With zero devices it
+ * settles on the last compiled API (often the dummy one). A reused instance
+ * then reports no ports forever, so each scan must construct a new pair.
+ */
+function scanPortNames(): { input: readonly string[]; output: readonly string[] } {
+  const inputPort = new Input();
+  const outputPort = new Output();
+  try {
+    const input: string[] = [];
+    for (let index = 0; index < inputPort.getPortCount(); index += 1) {
+      input.push(inputPort.getPortName(index));
+    }
+    const output: string[] = [];
+    for (let index = 0; index < outputPort.getPortCount(); index += 1) {
+      output.push(outputPort.getPortName(index));
+    }
+    return { input, output };
+  } finally {
+    releaseEnumerator(inputPort);
+    releaseEnumerator(outputPort);
+  }
+}
+
 function createPort(
   direction: "input" | "output",
   index: number,
@@ -71,23 +133,16 @@ export class NodeMidiTransport implements MidiTransport {
   #lastSendAtMs = 0;
 
   async listPorts(): Promise<readonly MidiPort[]> {
-    const input = new Input();
-    const output = new Output();
     const metadata = uniqueMetadataByName(await getWindowsMidiMetadata());
-
-    try {
-      const ports: MidiPort[] = [];
-      for (let index = 0; index < input.getPortCount(); index += 1) {
-        ports.push(createPort("input", index, input.getPortName(index), metadata));
-      }
-      for (let index = 0; index < output.getPortCount(); index += 1) {
-        ports.push(createPort("output", index, output.getPortName(index), metadata));
-      }
-      return ports;
-    } finally {
-      input.closePort();
-      output.closePort();
-    }
+    const names = scanPortNames();
+    const ports: MidiPort[] = [];
+    names.input.forEach((name, index) => {
+      ports.push(createPort("input", index, name, metadata));
+    });
+    names.output.forEach((name, index) => {
+      ports.push(createPort("output", index, name, metadata));
+    });
+    return ports;
   }
 
   async openInput(
@@ -126,7 +181,11 @@ export class NodeMidiTransport implements MidiTransport {
         if (closed) return;
         closed = true;
         input.removeAllListeners("message");
-        input.closePort();
+        if (portStillPresent(input, port.name)) {
+          input.closePort();
+        } else {
+          parkedInputs.push(input);
+        }
         this.#connections.delete(connection);
       },
     };
@@ -191,7 +250,11 @@ export class NodeMidiTransport implements MidiTransport {
       close: async () => {
         if (closed) return;
         closed = true;
-        output.closePort();
+        if (portStillPresent(output, port.name)) {
+          output.closePort();
+        } else {
+          parkedOutputs.push(output);
+        }
         this.#connections.delete(connection);
       },
     };
@@ -202,7 +265,7 @@ export class NodeMidiTransport implements MidiTransport {
   onPortsChanged(listener: () => void): () => void {
     this.#listeners.add(listener);
     if (!this.#pollTimer) {
-      void this.#startPolling();
+      this.#startPolling();
     }
 
     return () => {
@@ -223,23 +286,32 @@ export class NodeMidiTransport implements MidiTransport {
     this.#listeners.clear();
   }
 
-  async #startPolling(): Promise<void> {
-    this.#lastFingerprint = await this.#fingerprint();
+  #startPolling(): void {
+    this.#lastFingerprint = this.#portFingerprint();
     this.#pollTimer = setInterval(() => {
-      void this.#pollOnce();
+      this.#pollOnce();
     }, 1_000);
     this.#pollTimer.unref();
   }
 
-  async #pollOnce(): Promise<void> {
-    const fingerprint = await this.#fingerprint();
+  #pollOnce(): void {
+    let fingerprint = "";
+    try {
+      fingerprint = this.#portFingerprint();
+    } catch {
+      return;
+    }
     if (fingerprint === this.#lastFingerprint) return;
     this.#lastFingerprint = fingerprint;
     for (const listener of this.#listeners) listener();
   }
 
-  async #fingerprint(): Promise<string> {
-    const ports = await this.listPorts();
-    return JSON.stringify(ports.map(({ id, name }) => [id, name]));
+  /** Names only — hotplug must not spawn a PowerShell WMI query every second. */
+  #portFingerprint(): string {
+    const names = scanPortNames();
+    return [
+      ...names.input.map((name, index) => `in:${index}:${name}`),
+      ...names.output.map((name, index) => `out:${index}:${name}`),
+    ].join("|");
   }
 }

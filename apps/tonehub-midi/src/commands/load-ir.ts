@@ -8,22 +8,20 @@ export interface LoadIrCommandOptions {
   readonly input: string;
   readonly output: string;
   readonly file: string;
-  readonly slot?: string;
+  readonly slot: string;
   readonly cabinet?: string;
   readonly volume?: string;
   readonly presence?: string;
   readonly backup?: string;
   readonly out?: string;
   readonly timeout?: string;
-  /** Single confirm for persist + Cabinet select (upload slot default). */
+  /** Confirm persist + cabinet selection. */
   readonly confirmLoad?: boolean;
-  /** Still required when --slot is 0..6. */
-  readonly confirmOverwriteCabinet?: boolean;
   readonly json?: boolean;
 }
 
 /**
- * One-shot: WAV → padded ROM sector → persist slot (default 7) → select Cabinet (default 8).
+ * One-shot: WAV → padded ROM sector → persist the selected slot → select its cabinet.
  */
 export async function loadIrCommand(
   transport: MidiTransport,
@@ -35,19 +33,14 @@ export async function loadIrCommand(
     );
   }
 
-  const slotIndex = options.slot === undefined ? 7 : Number(options.slot);
-  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 7) {
-    throw new Error("--slot must be an integer 0..7 (default 7 = upload)");
-  }
-  if (slotIndex !== 7 && !options.confirmOverwriteCabinet) {
-    throw new Error(
-      `Refusing slot ${slotIndex}: factory cabinets need --confirm-overwrite-cabinet`,
-    );
+  const slotIndex = Number(options.slot);
+  if (!options.slot?.trim() || !Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 7) {
+    throw new Error("--slot must be an integer 0..7");
   }
 
-  const cabinet = options.cabinet === undefined ? 8 : Number(options.cabinet);
+  const cabinet = options.cabinet === undefined ? slotIndex + 1 : Number(options.cabinet);
   if (!Number.isInteger(cabinet) || cabinet < 0 || cabinet > 8) {
-    throw new Error("--cabinet must be an integer 0..8 (default 8)");
+    throw new Error("--cabinet must be an integer 0..8");
   }
 
   const volume = options.volume === undefined ? 0.5 : Number(options.volume);
@@ -55,7 +48,7 @@ export async function loadIrCommand(
     throw new Error("--volume must be a finite number");
   }
 
-  const presenceRaw = options.presence ?? "upload";
+  const presenceRaw = options.presence ?? (slotIndex === 7 ? "upload" : "factory");
   if (presenceRaw !== "upload" && presenceRaw !== "factory") {
     throw new Error("--presence must be upload or factory");
   }
@@ -73,15 +66,15 @@ export async function loadIrCommand(
     timeoutMs,
   };
 
+  const wav = new Uint8Array(await readFile(resolve(options.file)));
   let backupPath: string | undefined;
   if (options.backup !== undefined) {
     backupPath = resolve(options.backup);
     const dump = await client.dumpIrRom({ ...ports, slotIndex });
     await mkdir(dirname(backupPath), { recursive: true });
-    await writeFile(backupPath, dump.data);
+    await writeFile(backupPath, dump.data, { flag: "wx", flush: true });
   }
 
-  const wav = new Uint8Array(await readFile(resolve(options.file)));
   const result = await client.loadIrFromWav({
     ...ports,
     wav,

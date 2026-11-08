@@ -34,7 +34,6 @@ import {
   type CubeBabyPresetBank,
 } from "@tonehub/cube-baby-protocol";
 import type { MidiTransport } from "@tonehub/midi-core";
-import { createAsyncStore } from "./async-store.js";
 import {
   CubeBabyReadTimeoutError,
   CubeBabySessionPortMismatchError,
@@ -75,14 +74,6 @@ const BANK_ADDRESS = 0x0000_0000;
 const LIVE_BASE = 0x8000_0000;
 const STEP_GAP_MS = 250;
 
-/**
- * Link held by the current async chain inside `runExclusive`.
- * Not a field: concurrent callers must not steal re-entry and hit
- * `exchange already in progress` mid-op. Node uses AsyncLocalStorage;
- * React Native uses a stack store (no `node:async_hooks`).
- */
-const linkContext = createAsyncStore<CubeBabyLink>();
-
 export class CubeBabyClient {
   #sessionLink: CubeBabyLink | undefined;
 
@@ -110,26 +101,24 @@ export class CubeBabyClient {
     if (link !== undefined) await link.close();
   }
 
-  async #withLink<T>(ports: CubeBabyLinkPorts, fn: (link: CubeBabyLink) => Promise<T>): Promise<T> {
-    const inherited = linkContext.getStore();
-    if (inherited !== undefined) {
-      if (!inherited.samePorts(ports)) {
-        throw new CubeBabySessionPortMismatchError();
-      }
-      return fn(inherited);
-    }
-
+  async #withLink<T>(
+    ports: CubeBabyLinkPorts,
+    fn: (link: CubeBabyLink) => Promise<T>,
+    heldLink?: CubeBabyLink,
+  ): Promise<T> {
+    // Internal steps reuse the link already held by their public operation.
+    if (heldLink !== undefined) return fn(heldLink);
     if (this.#sessionLink !== undefined) {
       if (!this.#sessionLink.samePorts(ports)) {
         throw new CubeBabySessionPortMismatchError();
       }
       const session = this.#sessionLink;
-      return session.runExclusive(() => linkContext.run(session, () => fn(session)));
+      return session.runExclusive(() => fn(session));
     }
 
     const link = await CubeBabyLink.open(this.transport, ports);
     try {
-      return await link.runExclusive(() => linkContext.run(link, () => fn(link)));
+      return await link.runExclusive(() => fn(link));
     } finally {
       await link.close();
     }
@@ -166,122 +155,162 @@ export class CubeBabyClient {
     );
   }
 
-  async readMemory(options: ReadCubeBabyMemoryOptions): Promise<CubeBabyMemoryRead> {
+  readMemory(options: ReadCubeBabyMemoryOptions): Promise<CubeBabyMemoryRead> {
+    return this.#readMemory(options);
+  }
+
+  async #readMemory(
+    options: ReadCubeBabyMemoryOptions,
+    heldLink?: CubeBabyLink,
+  ): Promise<CubeBabyMemoryRead> {
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
       throw new Error("timeoutMs must be a positive integer");
     }
     const ports = { inputPortId: options.inputPortId, outputPortId: options.outputPortId };
     const request = encodeMemoryReadRequest(options.memory, options.address, options.length);
-    return this.#withLink(ports, (link) =>
-      link.exchangeUnlocked({
-        request,
-        timeoutMs,
-        timeoutError: new CubeBabyReadTimeoutError(timeoutMs),
-        ...(options.handshake === false ? {} : { beforeSend: async () => this.#handshake(link) }),
-        match: (message, receivedAtMs) => {
-          if (
-            message.kind !== "memory-read-response" ||
-            !message.envelope.checksumValid ||
-            message.memory !== options.memory ||
-            message.address !== options.address ||
-            message.length !== options.length
-          ) {
-            return undefined;
-          }
-          return {
-            memory: message.memory,
-            address: message.address,
-            length: message.length,
-            data: message.data,
-            observedAtMs: receivedAtMs,
-          };
-        },
-      }),
+    return this.#withLink(
+      ports,
+      (link) =>
+        link.exchangeUnlocked({
+          request,
+          timeoutMs,
+          timeoutError: new CubeBabyReadTimeoutError(timeoutMs),
+          ...(options.handshake === false ? {} : { beforeSend: async () => this.#handshake(link) }),
+          match: (message, receivedAtMs) => {
+            if (
+              message.kind !== "memory-read-response" ||
+              !message.envelope.checksumValid ||
+              message.memory !== options.memory ||
+              message.address !== options.address ||
+              message.length !== options.length
+            ) {
+              return undefined;
+            }
+            return {
+              memory: message.memory,
+              address: message.address,
+              length: message.length,
+              data: message.data,
+              observedAtMs: receivedAtMs,
+            };
+          },
+        }),
+      heldLink,
     );
   }
 
-  async writeMemory(options: WriteCubeBabyMemoryOptions): Promise<CubeBabyMemoryWriteAck> {
+  writeMemory(options: WriteCubeBabyMemoryOptions): Promise<CubeBabyMemoryWriteAck> {
+    return this.#writeMemory(options);
+  }
+
+  async #writeMemory(
+    options: WriteCubeBabyMemoryOptions,
+    heldLink?: CubeBabyLink,
+  ): Promise<CubeBabyMemoryWriteAck> {
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
       throw new Error("timeoutMs must be a positive integer");
     }
     const ports = { inputPortId: options.inputPortId, outputPortId: options.outputPortId };
     const request = encodeMemoryWriteRequest(options.memory, options.address, options.data);
-    return this.#withLink(ports, (link) =>
-      link.exchangeUnlocked({
-        request,
-        timeoutMs,
-        timeoutError: new CubeBabyWriteTimeoutError(timeoutMs),
-        ...(options.handshake === false ? {} : { beforeSend: async () => this.#handshake(link) }),
-        match: (message, receivedAtMs) => {
-          if (message.kind !== "ack" || !message.envelope.checksumValid) return undefined;
-          return {
-            memory: options.memory,
-            address: options.address,
-            length: options.data.length,
-            data: options.data.slice(),
-            accepted: message.accepted,
-            rawValue: message.rawValue,
-            observedAtMs: receivedAtMs,
-          };
-        },
-      }),
+    return this.#withLink(
+      ports,
+      (link) =>
+        link.exchangeUnlocked({
+          request,
+          timeoutMs,
+          timeoutError: new CubeBabyWriteTimeoutError(timeoutMs),
+          ...(options.handshake === false ? {} : { beforeSend: async () => this.#handshake(link) }),
+          match: (message, receivedAtMs) => {
+            if (message.kind !== "ack" || !message.envelope.checksumValid) return undefined;
+            return {
+              memory: options.memory,
+              address: options.address,
+              length: options.data.length,
+              data: options.data.slice(),
+              accepted: message.accepted,
+              rawValue: message.rawValue,
+              observedAtMs: receivedAtMs,
+            };
+          },
+        }),
+      heldLink,
     );
   }
 
-  async eraseMemory(options: EraseCubeBabyMemoryOptions): Promise<CubeBabyEraseAck> {
+  eraseMemory(options: EraseCubeBabyMemoryOptions): Promise<CubeBabyEraseAck> {
+    return this.#eraseMemory(options);
+  }
+
+  async #eraseMemory(
+    options: EraseCubeBabyMemoryOptions,
+    heldLink?: CubeBabyLink,
+  ): Promise<CubeBabyEraseAck> {
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
       throw new Error("timeoutMs must be a positive integer");
     }
     const ports = { inputPortId: options.inputPortId, outputPortId: options.outputPortId };
     const request = encodeEraseRequest(options.memory, options.address);
-    return this.#withLink(ports, (link) =>
-      link.exchangeUnlocked({
-        request,
-        timeoutMs,
-        timeoutError: new CubeBabyWriteTimeoutError(timeoutMs),
-        ...(options.handshake === false ? {} : { beforeSend: async () => this.#handshake(link) }),
-        match: (message, receivedAtMs) => {
-          if (message.kind !== "ack" || !message.envelope.checksumValid) return undefined;
-          return {
-            memory: options.memory,
-            address: options.address,
-            accepted: message.accepted,
-            rawValue: message.rawValue,
-            observedAtMs: receivedAtMs,
-          };
-        },
-      }),
+    return this.#withLink(
+      ports,
+      (link) =>
+        link.exchangeUnlocked({
+          request,
+          timeoutMs,
+          timeoutError: new CubeBabyWriteTimeoutError(timeoutMs),
+          ...(options.handshake === false ? {} : { beforeSend: async () => this.#handshake(link) }),
+          match: (message, receivedAtMs) => {
+            if (message.kind !== "ack" || !message.envelope.checksumValid) return undefined;
+            return {
+              memory: options.memory,
+              address: options.address,
+              accepted: message.accepted,
+              rawValue: message.rawValue,
+              observedAtMs: receivedAtMs,
+            };
+          },
+        }),
+      heldLink,
     );
   }
 
-  async writeRegister(options: WriteCubeBabyRegisterOptions): Promise<CubeBabyRegisterWriteAck> {
+  writeRegister(options: WriteCubeBabyRegisterOptions): Promise<CubeBabyRegisterWriteAck> {
+    return this.#writeRegister(options);
+  }
+
+  async #writeRegister(
+    options: WriteCubeBabyRegisterOptions,
+    heldLink?: CubeBabyLink,
+  ): Promise<CubeBabyRegisterWriteAck> {
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
       throw new Error("timeoutMs must be a positive integer");
     }
     const ports = { inputPortId: options.inputPortId, outputPortId: options.outputPortId };
     const request = encodeRegisterWriteRequest(options.memory, options.address, options.value);
-    return this.#withLink(ports, (link) =>
-      link.exchangeUnlocked({
-        request,
-        timeoutMs,
-        timeoutError: new CubeBabyWriteTimeoutError(timeoutMs),
-        ...(options.handshake === false ? {} : { beforeSend: async () => this.#handshake(link) }),
-        match: (message, receivedAtMs) => {
-          if (message.kind !== "ack" || !message.envelope.checksumValid) return undefined;
-          return {
-            memory: options.memory,
-            address: options.address,
-            value: options.value,
-            accepted: message.accepted,
-            rawValue: message.rawValue,
-            observedAtMs: receivedAtMs,
-          };
-        },
-      }),
+    return this.#withLink(
+      ports,
+      (link) =>
+        link.exchangeUnlocked({
+          request,
+          timeoutMs,
+          timeoutError: new CubeBabyWriteTimeoutError(timeoutMs),
+          ...(options.handshake === false ? {} : { beforeSend: async () => this.#handshake(link) }),
+          match: (message, receivedAtMs) => {
+            if (message.kind !== "ack" || !message.envelope.checksumValid) return undefined;
+            return {
+              memory: options.memory,
+              address: options.address,
+              value: options.value,
+              accepted: message.accepted,
+              rawValue: message.rawValue,
+              observedAtMs: receivedAtMs,
+            };
+          },
+        }),
+      heldLink,
     );
   }
 
@@ -310,14 +339,17 @@ export class CubeBabyClient {
       timeoutMs,
     };
 
-    return this.#withLink(ports, async () => {
-      const before = await this.readMemory({
-        ...ports,
-        memory: BANK_MEMORY,
-        address: BANK_ADDRESS,
-        length: PRESET_BANK_BYTE_LENGTH,
-        handshake: false,
-      });
+    return this.#withLink(ports, async (link) => {
+      const before = await this.#readMemory(
+        {
+          ...ports,
+          memory: BANK_MEMORY,
+          address: BANK_ADDRESS,
+          length: PRESET_BANK_BYTE_LENGTH,
+          handshake: false,
+        },
+        link,
+      );
       await sleep(STEP_GAP_MS);
 
       const written = before.data.slice();
@@ -325,31 +357,40 @@ export class CubeBabyClient {
       const previousValue = written[byteIndex] ?? 0;
       written[byteIndex] = options.value;
 
-      const liveAck = await this.writeMemory({
-        ...ports,
-        memory: BANK_MEMORY,
-        address: LIVE_BASE + options.offset,
-        data: Uint8Array.of(options.value),
-        handshake: false,
-      });
+      const liveAck = await this.#writeMemory(
+        {
+          ...ports,
+          memory: BANK_MEMORY,
+          address: LIVE_BASE + options.offset,
+          data: Uint8Array.of(options.value),
+          handshake: false,
+        },
+        link,
+      );
       await sleep(STEP_GAP_MS);
 
-      const bankAck = await this.writeMemory({
-        ...ports,
-        memory: BANK_MEMORY,
-        address: BANK_ADDRESS,
-        data: written,
-        handshake: false,
-      });
+      const bankAck = await this.#writeMemory(
+        {
+          ...ports,
+          memory: BANK_MEMORY,
+          address: BANK_ADDRESS,
+          data: written,
+          handshake: false,
+        },
+        link,
+      );
       await sleep(STEP_GAP_MS);
 
-      const after = await this.readMemory({
-        ...ports,
-        memory: BANK_MEMORY,
-        address: BANK_ADDRESS,
-        length: PRESET_BANK_BYTE_LENGTH,
-        handshake: false,
-      });
+      const after = await this.#readMemory(
+        {
+          ...ports,
+          memory: BANK_MEMORY,
+          address: BANK_ADDRESS,
+          length: PRESET_BANK_BYTE_LENGTH,
+          handshake: false,
+        },
+        link,
+      );
 
       const verified =
         after.data.length === written.length && after.data.every((byte, i) => byte === written[i]);
@@ -392,24 +433,30 @@ export class CubeBabyClient {
       timeoutMs,
     };
 
-    return this.#withLink(ports, async () => {
-      const before = await this.readMemory({
-        ...ports,
-        memory: BANK_MEMORY,
-        address: BANK_ADDRESS,
-        length: PRESET_BANK_BYTE_LENGTH,
-        handshake: false,
-      });
+    return this.#withLink(ports, async (link) => {
+      const before = await this.#readMemory(
+        {
+          ...ports,
+          memory: BANK_MEMORY,
+          address: BANK_ADDRESS,
+          length: PRESET_BANK_BYTE_LENGTH,
+          handshake: false,
+        },
+        link,
+      );
       await sleep(STEP_GAP_MS);
 
       const written = options.data.slice();
-      const bankAck = await this.writeMemory({
-        ...ports,
-        memory: BANK_MEMORY,
-        address: BANK_ADDRESS,
-        data: written,
-        handshake: false,
-      });
+      const bankAck = await this.#writeMemory(
+        {
+          ...ports,
+          memory: BANK_MEMORY,
+          address: BANK_ADDRESS,
+          data: written,
+          handshake: false,
+        },
+        link,
+      );
       await sleep(STEP_GAP_MS);
 
       const slotStart = liveSlotIndex * PRESET_SLOT_BYTE_LENGTH;
@@ -417,37 +464,46 @@ export class CubeBabyClient {
       for (let offset = 0; offset <= 12; offset += 1) {
         const value = written[slotStart + offset] ?? 0;
         // Live RAM mirrors bank slots at +0x10 per foot (exp. 038).
-        const ack = await this.writeMemory({
-          ...ports,
-          memory: BANK_MEMORY,
-          address: LIVE_BASE + slotStart + offset,
-          data: Uint8Array.of(value),
-          handshake: false,
-        });
+        const ack = await this.#writeMemory(
+          {
+            ...ports,
+            memory: BANK_MEMORY,
+            address: LIVE_BASE + slotStart + offset,
+            data: Uint8Array.of(value),
+            handshake: false,
+          },
+          link,
+        );
         liveAcks.push({ offset, accepted: ack.accepted, rawValue: ack.rawValue });
         await sleep(40);
       }
       await sleep(STEP_GAP_MS);
 
       // Pedal sometimes needs a beat before bank readback matches; one retry.
-      let after = await this.readMemory({
-        ...ports,
-        memory: BANK_MEMORY,
-        address: BANK_ADDRESS,
-        length: PRESET_BANK_BYTE_LENGTH,
-        handshake: false,
-      });
-      let verified =
-        after.data.length === written.length && after.data.every((byte, i) => byte === written[i]);
-      if (!verified) {
-        await sleep(STEP_GAP_MS);
-        after = await this.readMemory({
+      let after = await this.#readMemory(
+        {
           ...ports,
           memory: BANK_MEMORY,
           address: BANK_ADDRESS,
           length: PRESET_BANK_BYTE_LENGTH,
           handshake: false,
-        });
+        },
+        link,
+      );
+      let verified =
+        after.data.length === written.length && after.data.every((byte, i) => byte === written[i]);
+      if (!verified) {
+        await sleep(STEP_GAP_MS);
+        after = await this.#readMemory(
+          {
+            ...ports,
+            memory: BANK_MEMORY,
+            address: BANK_ADDRESS,
+            length: PRESET_BANK_BYTE_LENGTH,
+            handshake: false,
+          },
+          link,
+        );
         verified =
           after.data.length === written.length &&
           after.data.every((byte, i) => byte === written[i]);
@@ -495,7 +551,7 @@ export class CubeBabyClient {
       timeoutMs,
     };
 
-    return this.#withLink(ports, async () => {
+    return this.#withLink(ports, async (link) => {
       const registerAcks: {
         address: number;
         value: number;
@@ -504,22 +560,28 @@ export class CubeBabyClient {
       }[] = [];
       const chunkAcks: { address: number; length: number; accepted: boolean }[] = [];
 
-      const flagOff = await this.writeMemory({
-        ...ports,
-        memory: IR_LIVE_MEMORY,
-        address: IR_LIVE_FLAG_ADDRESS,
-        data: Uint8Array.of(0),
-        handshake: false,
-      });
+      const flagOff = await this.#writeMemory(
+        {
+          ...ports,
+          memory: IR_LIVE_MEMORY,
+          address: IR_LIVE_FLAG_ADDRESS,
+          data: Uint8Array.of(0),
+          handshake: false,
+        },
+        link,
+      );
       await sleep(80);
 
-      const regFlagOff = await this.writeRegister({
-        ...ports,
-        memory: IR_LIVE_MEMORY,
-        address: IR_LIVE_FLAG_ADDRESS,
-        value: 1,
-        handshake: false,
-      });
+      const regFlagOff = await this.#writeRegister(
+        {
+          ...ports,
+          memory: IR_LIVE_MEMORY,
+          address: IR_LIVE_FLAG_ADDRESS,
+          value: 1,
+          handshake: false,
+        },
+        link,
+      );
       registerAcks.push({
         address: regFlagOff.address,
         value: regFlagOff.value,
@@ -531,24 +593,30 @@ export class CubeBabyClient {
       for (let offset = 0; offset < payload.length; offset += IR_LIVE_CHUNK_SIZE) {
         const chunk = payload.subarray(offset, offset + IR_LIVE_CHUNK_SIZE);
         const address = IR_LIVE_DATA_ADDRESS + offset;
-        const ack = await this.writeMemory({
-          ...ports,
-          memory: IR_LIVE_MEMORY,
-          address,
-          data: chunk,
-          handshake: false,
-        });
+        const ack = await this.#writeMemory(
+          {
+            ...ports,
+            memory: IR_LIVE_MEMORY,
+            address,
+            data: chunk,
+            handshake: false,
+          },
+          link,
+        );
         chunkAcks.push({ address, length: chunk.length, accepted: ack.accepted });
         await sleep(40);
       }
 
-      const regLength = await this.writeRegister({
-        ...ports,
-        memory: IR_LIVE_MEMORY,
-        address: IR_LIVE_DATA_ADDRESS,
-        value: payload.length,
-        handshake: false,
-      });
+      const regLength = await this.#writeRegister(
+        {
+          ...ports,
+          memory: IR_LIVE_MEMORY,
+          address: IR_LIVE_DATA_ADDRESS,
+          value: payload.length,
+          handshake: false,
+        },
+        link,
+      );
       registerAcks.push({
         address: regLength.address,
         value: regLength.value,
@@ -557,22 +625,28 @@ export class CubeBabyClient {
       });
       await sleep(80);
 
-      const flagOn = await this.writeMemory({
-        ...ports,
-        memory: IR_LIVE_MEMORY,
-        address: IR_LIVE_FLAG_ADDRESS,
-        data: Uint8Array.of(1),
-        handshake: false,
-      });
+      const flagOn = await this.#writeMemory(
+        {
+          ...ports,
+          memory: IR_LIVE_MEMORY,
+          address: IR_LIVE_FLAG_ADDRESS,
+          data: Uint8Array.of(1),
+          handshake: false,
+        },
+        link,
+      );
       await sleep(80);
 
-      const regFlagOn = await this.writeRegister({
-        ...ports,
-        memory: IR_LIVE_MEMORY,
-        address: IR_LIVE_FLAG_ADDRESS,
-        value: 1,
-        handshake: false,
-      });
+      const regFlagOn = await this.#writeRegister(
+        {
+          ...ports,
+          memory: IR_LIVE_MEMORY,
+          address: IR_LIVE_FLAG_ADDRESS,
+          value: 1,
+          handshake: false,
+        },
+        link,
+      );
       registerAcks.push({
         address: regFlagOn.address,
         value: regFlagOn.value,
@@ -616,18 +690,21 @@ export class CubeBabyClient {
       timeoutMs,
     };
 
-    return this.#withLink(ports, async () => {
+    return this.#withLink(ports, async (link) => {
       const parts: number[] = [];
       let observedAtMs = Date.now();
       for (let offset = 0; offset < IR_ROM_SLOT_SIZE; offset += IR_ROM_VERIFY_CHUNK_SIZE) {
         const length = Math.min(IR_ROM_VERIFY_CHUNK_SIZE, IR_ROM_SLOT_SIZE - offset);
-        const read = await this.readMemory({
-          ...ports,
-          memory: IR_ROM_MEMORY,
-          address: address + offset,
-          length,
-          handshake: false,
-        });
+        const read = await this.#readMemory(
+          {
+            ...ports,
+            memory: IR_ROM_MEMORY,
+            address: address + offset,
+            length,
+            handshake: false,
+          },
+          link,
+        );
         parts.push(...read.data);
         observedAtMs = read.observedAtMs;
         await sleep(40);
@@ -648,7 +725,14 @@ export class CubeBabyClient {
    * Default slot is 7 (upload `0x00070000`). Accepts 2056 (zero-padded to 4096 by default)
    * or a full 4096-byte sector dump.
    */
-  async persistIrRom(options: PersistIrRomOptions): Promise<CubeBabyPersistIrRomResult> {
+  persistIrRom(options: PersistIrRomOptions): Promise<CubeBabyPersistIrRomResult> {
+    return this.#persistIrRom(options);
+  }
+
+  async #persistIrRom(
+    options: PersistIrRomOptions,
+    heldLink?: CubeBabyLink,
+  ): Promise<CubeBabyPersistIrRomResult> {
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) {
       throw new Error("timeoutMs must be a positive integer");
@@ -678,64 +762,77 @@ export class CubeBabyClient {
     const padded = padSector && inputLength === IR_ROM_PAYLOAD_LENGTH;
     const payload = padSector ? expandIrRomSector(options.payload) : options.payload.slice();
 
-    return this.#withLink(ports, async () => {
-      const eraseAck = await this.eraseMemory({
-        ...ports,
-        memory: IR_ROM_MEMORY,
-        address,
-        handshake: false,
-      });
-      await sleep(STEP_GAP_MS);
+    return this.#withLink(
+      ports,
+      async (link) => {
+        const eraseAck = await this.#eraseMemory(
+          {
+            ...ports,
+            memory: IR_ROM_MEMORY,
+            address,
+            handshake: false,
+          },
+          link,
+        );
+        await sleep(STEP_GAP_MS);
 
-      let writeChunkCount = 0;
-      for (let offset = 0; offset < payload.length; offset += IR_ROM_CHUNK_SIZE) {
-        const chunk = payload.subarray(offset, offset + IR_ROM_CHUNK_SIZE);
-        await this.writeMemory({
-          ...ports,
-          memory: IR_ROM_MEMORY,
-          address: address + offset,
-          data: chunk,
-          handshake: false,
-        });
-        writeChunkCount += 1;
-        await sleep(40);
-      }
-      await sleep(STEP_GAP_MS);
+        let writeChunkCount = 0;
+        for (let offset = 0; offset < payload.length; offset += IR_ROM_CHUNK_SIZE) {
+          const chunk = payload.subarray(offset, offset + IR_ROM_CHUNK_SIZE);
+          await this.#writeMemory(
+            {
+              ...ports,
+              memory: IR_ROM_MEMORY,
+              address: address + offset,
+              data: chunk,
+              handshake: false,
+            },
+            link,
+          );
+          writeChunkCount += 1;
+          await sleep(40);
+        }
+        await sleep(STEP_GAP_MS);
 
-      const verifiedParts: number[] = [];
-      let observedAtMs = eraseAck.observedAtMs;
-      for (let offset = 0; offset < payload.length; offset += IR_ROM_VERIFY_CHUNK_SIZE) {
-        const length = Math.min(IR_ROM_VERIFY_CHUNK_SIZE, payload.length - offset);
-        const read = await this.readMemory({
-          ...ports,
-          memory: IR_ROM_MEMORY,
-          address: address + offset,
-          length,
-          handshake: false,
-        });
-        verifiedParts.push(...read.data);
-        observedAtMs = read.observedAtMs;
-        await sleep(40);
-      }
+        const verifiedParts: number[] = [];
+        let observedAtMs = eraseAck.observedAtMs;
+        for (let offset = 0; offset < payload.length; offset += IR_ROM_VERIFY_CHUNK_SIZE) {
+          const length = Math.min(IR_ROM_VERIFY_CHUNK_SIZE, payload.length - offset);
+          const read = await this.#readMemory(
+            {
+              ...ports,
+              memory: IR_ROM_MEMORY,
+              address: address + offset,
+              length,
+              handshake: false,
+            },
+            link,
+          );
+          verifiedParts.push(...read.data);
+          observedAtMs = read.observedAtMs;
+          await sleep(40);
+        }
 
-      const verifiedBytes = Uint8Array.from(verifiedParts);
-      const verified =
-        verifiedBytes.length === payload.length &&
-        verifiedBytes.every((byte, index) => byte === payload[index]);
+        const verifiedBytes = Uint8Array.from(verifiedParts);
+        const verified =
+          verifiedBytes.length === payload.length &&
+          verifiedBytes.every((byte, index) => byte === payload[index]);
 
-      return {
-        slotIndex,
-        address,
-        payloadLength: inputLength,
-        writtenLength: payload.length,
-        padded,
-        eraseAck: { accepted: eraseAck.accepted, rawValue: eraseAck.rawValue },
-        writeChunkCount,
-        verifyBytes: verifiedBytes.length,
-        verified,
-        observedAtMs,
-      };
-    });
+        return {
+          slotIndex,
+          address,
+          payloadLength: inputLength,
+          writtenLength: payload.length,
+          padded,
+          eraseAck: { accepted: eraseAck.accepted, rawValue: eraseAck.rawValue },
+          writeChunkCount,
+          verifyBytes: verifiedBytes.length,
+          verified,
+          observedAtMs,
+        };
+      },
+      heldLink,
+    );
   }
 
   /** Read and decode the A+B+C preset bank (48 bytes @ memory 5 / address 0). */
@@ -759,7 +856,14 @@ export class CubeBabyClient {
    * Write one live parameter by name or within-slot offset.
    * Address = `0x80000000 + slotIndex*16 + field` (exp. 038 slot bands).
    */
-  async writeLiveParam(options: WriteLiveParamOptions): Promise<CubeBabyMemoryWriteAck> {
+  writeLiveParam(options: WriteLiveParamOptions): Promise<CubeBabyMemoryWriteAck> {
+    return this.#writeLiveParam(options);
+  }
+
+  async #writeLiveParam(
+    options: WriteLiveParamOptions,
+    heldLink?: CubeBabyLink,
+  ): Promise<CubeBabyMemoryWriteAck> {
     if (options.param === undefined && options.offset === undefined) {
       throw new Error("writeLiveParam requires param or offset");
     }
@@ -777,22 +881,32 @@ export class CubeBabyClient {
       options.param !== undefined
         ? liveParamAddress(options.param, slotIndex)
         : liveParamAddress(options.offset as number, slotIndex);
-    return this.writeMemory({
-      inputPortId: options.inputPortId,
-      outputPortId: options.outputPortId,
-      memory: LIVE_PARAM_MEMORY,
-      address,
-      data: Uint8Array.of(options.value),
-      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
-      ...(options.handshake === undefined ? {} : { handshake: options.handshake }),
-    });
+    return this.#writeMemory(
+      {
+        inputPortId: options.inputPortId,
+        outputPortId: options.outputPortId,
+        memory: LIVE_PARAM_MEMORY,
+        address,
+        data: Uint8Array.of(options.value),
+        ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+        ...(options.handshake === undefined ? {} : { handshake: options.handshake }),
+      },
+      heldLink,
+    );
   }
 
   /**
    * Select live Cabinet (0..8). Nudges via another value first so IR RAM reloads
    * when the target Cabinet was already active.
    */
-  async selectCabinet(options: SelectCabinetOptions): Promise<CubeBabySelectCabinetResult> {
+  selectCabinet(options: SelectCabinetOptions): Promise<CubeBabySelectCabinetResult> {
+    return this.#selectCabinet(options);
+  }
+
+  async #selectCabinet(
+    options: SelectCabinetOptions,
+    heldLink?: CubeBabyLink,
+  ): Promise<CubeBabySelectCabinetResult> {
     if (!Number.isInteger(options.cabinet) || options.cabinet < 0 || options.cabinet > 8) {
       throw new Error("cabinet must be an integer 0..8");
     }
@@ -802,51 +916,64 @@ export class CubeBabyClient {
       outputPortId: options.outputPortId,
       ...timeout,
     };
-    return this.#withLink(ports, async () => {
-      const nudge = options.nudge !== false;
-      let nudgedFrom: number | null = null;
-      if (nudge) {
-        nudgedFrom = options.cabinet === 1 ? 2 : 1;
-        await this.writeLiveParam({
-          ...ports,
-          param: "cabinet",
-          value: nudgedFrom,
-          handshake: false,
-          ...(options.slotIndex === undefined ? {} : { slotIndex: options.slotIndex }),
-        });
+    return this.#withLink(
+      ports,
+      async (link) => {
+        const nudge = options.nudge !== false;
+        let nudgedFrom: number | null = null;
+        if (nudge) {
+          nudgedFrom = options.cabinet === 1 ? 2 : 1;
+          await this.#writeLiveParam(
+            {
+              ...ports,
+              param: "cabinet",
+              value: nudgedFrom,
+              handshake: false,
+              ...(options.slotIndex === undefined ? {} : { slotIndex: options.slotIndex }),
+            },
+            link,
+          );
+          await sleep(350);
+        }
+        const ack = await this.#writeLiveParam(
+          {
+            ...ports,
+            param: "cabinet",
+            value: options.cabinet,
+            handshake: false,
+            ...(options.slotIndex === undefined ? {} : { slotIndex: options.slotIndex }),
+          },
+          link,
+        );
         await sleep(350);
-      }
-      const ack = await this.writeLiveParam({
-        ...ports,
-        param: "cabinet",
-        value: options.cabinet,
-        handshake: false,
-        ...(options.slotIndex === undefined ? {} : { slotIndex: options.slotIndex }),
-      });
-      await sleep(350);
-      return {
-        cabinet: options.cabinet,
-        romSlot: cabinetToRomSlot(options.cabinet),
-        nudgedFrom,
-        ack: { accepted: ack.accepted, rawValue: ack.rawValue },
-        observedAtMs: ack.observedAtMs,
-      };
-    });
+        return {
+          cabinet: options.cabinet,
+          romSlot: cabinetToRomSlot(options.cabinet),
+          nudgedFrom,
+          ack: { accepted: ack.accepted, rawValue: ack.rawValue },
+          observedAtMs: ack.observedAtMs,
+        };
+      },
+      heldLink,
+    );
   }
 
   /**
    * High-level IR load: WAV → ROM sector → persist slot → select Cabinet.
-   * Defaults: upload slot 7 + Cabinet 8.
+   * Selects the corresponding cabinet unless the caller specifies one.
    */
   async loadIrFromWav(options: LoadIrFromWavOptions): Promise<CubeBabyLoadIrFromWavResult> {
     const slotIndex = options.slotIndex ?? 7;
-    const cabinet = options.cabinet ?? 8;
+    const cabinet = options.cabinet ?? slotIndex + 1;
+    if (!Number.isInteger(cabinet) || cabinet < 0 || cabinet > 8) {
+      throw new Error("cabinet must be an integer 0..8");
+    }
     const decoded = decodeWavToMonoFloat32(options.wav);
     const samples = prepareIrSamples(decoded.samples, decoded.sampleRate);
     const sector = buildIrRomSector({
       samples,
       volume: options.volume ?? 0.5,
-      presence: options.presence ?? "upload",
+      presence: options.presence ?? (slotIndex === 7 ? "upload" : "factory"),
     });
     const expectedLive = irRomSectorToLivePayload(sector);
     const timeoutMs = options.timeoutMs ?? 5_000;
@@ -856,25 +983,37 @@ export class CubeBabyClient {
       outputPortId: options.outputPortId,
       timeoutMs,
     };
-    return this.#withLink(ports, async () => {
-      const persist = await this.persistIrRom({
-        ...ports,
-        payload: sector,
-        slotIndex,
-        padSector: true,
-      });
-      const select = await this.selectCabinet({
-        ...ports,
-        cabinet,
-        nudge: true,
-      });
-      const live = await this.readMemory({
-        ...ports,
-        memory: IR_LIVE_MEMORY,
-        address: IR_LIVE_DATA_ADDRESS,
-        length: 68,
-        handshake: false,
-      });
+    return this.#withLink(ports, async (link) => {
+      const persist = await this.#persistIrRom(
+        {
+          ...ports,
+          payload: sector,
+          slotIndex,
+          padSector: true,
+        },
+        link,
+      );
+      if (!persist.verified) {
+        throw new Error("IR ROM read-back did not match the written sector. Cabinet selection stopped.");
+      }
+      const select = await this.#selectCabinet(
+        {
+          ...ports,
+          cabinet,
+          nudge: true,
+        },
+        link,
+      );
+      const live = await this.#readMemory(
+        {
+          ...ports,
+          memory: IR_LIVE_MEMORY,
+          address: IR_LIVE_DATA_ADDRESS,
+          length: 68,
+          handshake: false,
+        },
+        link,
+      );
       let liveMatchPrefix = 0;
       for (let i = 0; i < 68; i += 1) {
         if (live.data[i] === expectedLive[i]) liveMatchPrefix += 1;
