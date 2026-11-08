@@ -994,7 +994,9 @@ export class CubeBabyClient {
         link,
       );
       if (!persist.verified) {
-        throw new Error("IR ROM read-back did not match the written sector. Cabinet selection stopped.");
+        throw new Error(
+          "IR ROM read-back did not match the written sector. Cabinet selection stopped.",
+        );
       }
       const select = await this.#selectCabinet(
         {

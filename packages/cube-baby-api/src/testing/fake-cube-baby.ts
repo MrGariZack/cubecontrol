@@ -179,7 +179,8 @@ export class FakeCubeBabyTransport implements MidiTransport {
     if (memory === 0) {
       const offset = address - IR_ROM_FACTORY_BASE;
       for (let i = 0; i < length; i += 1) {
-        out[i] = offset + i >= 0 && offset + i < this.irRom.length ? (this.irRom[offset + i] ?? 0) : 0;
+        out[i] =
+          offset + i >= 0 && offset + i < this.irRom.length ? (this.irRom[offset + i] ?? 0) : 0;
       }
       return out;
     }

@@ -9,11 +9,7 @@ import {
 import { describe, expect, it } from "vitest";
 import { CubeBabyClient } from "./client.js";
 import { CubeBabySession } from "./session.js";
-import {
-  FAKE_INPUT,
-  FAKE_OUTPUT,
-  FakeCubeBabyTransport,
-} from "./testing/fake-cube-baby.js";
+import { FAKE_INPUT, FAKE_OUTPUT, FakeCubeBabyTransport } from "./testing/fake-cube-baby.js";
 
 const PORTS = {
   inputPortId: FAKE_INPUT.id,

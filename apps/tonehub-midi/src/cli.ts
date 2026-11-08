@@ -360,10 +360,7 @@ program
   .requiredOption("--slot <n>", "IR ROM slot to overwrite (0..7)")
   .option("--timeout <ms>", "Per-step timeout, maximum 10000 ms")
   .option("--confirm-ir-rom-persist", "Confirm erase + ROM rewrite")
-  .option(
-    "--confirm-overwrite-cabinet",
-    "Legacy flag accepted for compatibility",
-  )
+  .option("--confirm-overwrite-cabinet", "Legacy flag accepted for compatibility")
   .option("--no-pad-sector", "Do not zero-pad 2056→4096 (leaves erase tail 0xFF)")
   .option("--json", "Emit machine-readable JSON")
   .action(

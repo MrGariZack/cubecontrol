@@ -141,7 +141,9 @@ export async function importIrWavCommand(
       timeoutMs,
     });
     if (!result.verified) {
-      throw new Error("IR ROM read-back did not match the written sector. Cabinet selection stopped.");
+      throw new Error(
+        "IR ROM read-back did not match the written sector. Cabinet selection stopped.",
+      );
     }
     persist = {
       slotIndex: result.slotIndex,

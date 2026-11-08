@@ -54,9 +54,9 @@ describe("CubeBabyClient against FakeCubeBabyTransport", () => {
       }),
     ).rejects.toThrow("Cabinet selection stopped");
     expect(
-      transport.sent.map(decodeCubeBabyMessage).some(
-        (frame) => frame.kind === "memory-write-request" && frame.memory === 5,
-      ),
+      transport.sent
+        .map(decodeCubeBabyMessage)
+        .some((frame) => frame.kind === "memory-write-request" && frame.memory === 5),
     ).toBe(false);
   }, 15_000);
 
@@ -112,48 +112,44 @@ describe("CubeBabyClient against FakeCubeBabyTransport", () => {
     expect(transport.sent.filter((m) => m[0] === 0xf0).length).toBeGreaterThanOrEqual(2);
   });
 
-  it(
-    "dumpIrRom + persistIrRom round-trips a sector on one ephemeral link",
-    async () => {
-      const samples = new Float32Array(512);
-      samples[0] = 0.25;
-      samples[1] = -0.5;
-      const sector = buildIrRomSector({ samples, volume: 0.5, presence: "upload" });
-      // Place sector at upload slot index 7.
-      const irRom = new Uint8Array(IR_ROM_SLOT_SIZE * 8);
-      irRom.set(sector, 7 * IR_ROM_SLOT_SIZE);
+  it("dumpIrRom + persistIrRom round-trips a sector on one ephemeral link", async () => {
+    const samples = new Float32Array(512);
+    samples[0] = 0.25;
+    samples[1] = -0.5;
+    const sector = buildIrRomSector({ samples, volume: 0.5, presence: "upload" });
+    // Place sector at upload slot index 7.
+    const irRom = new Uint8Array(IR_ROM_SLOT_SIZE * 8);
+    irRom.set(sector, 7 * IR_ROM_SLOT_SIZE);
 
-      const transport = new FakeCubeBabyTransport({ irRom });
-      const client = new CubeBabyClient(transport);
-      const ports = {
-        inputPortId: FAKE_INPUT.id,
-        outputPortId: FAKE_OUTPUT.id,
-        timeoutMs: 500,
-      };
+    const transport = new FakeCubeBabyTransport({ irRom });
+    const client = new CubeBabyClient(transport);
+    const ports = {
+      inputPortId: FAKE_INPUT.id,
+      outputPortId: FAKE_OUTPUT.id,
+      timeoutMs: 500,
+    };
 
-      const dumped = await client.dumpIrRom({ ...ports, slotIndex: 7 });
-      expect(dumped.data).toEqual(sector);
-      // One open for the whole dump (not per chunk).
-      expect(transport.openInputCount).toBe(1);
+    const dumped = await client.dumpIrRom({ ...ports, slotIndex: 7 });
+    expect(dumped.data).toEqual(sector);
+    // One open for the whole dump (not per chunk).
+    expect(transport.openInputCount).toBe(1);
 
-      const blank = new Uint8Array(IR_ROM_SLOT_SIZE);
-      blank.fill(0xff);
-      transport.irRom.set(blank, 7 * IR_ROM_SLOT_SIZE);
-      transport.openInputCount = 0;
-      transport.openOutputCount = 0;
+    const blank = new Uint8Array(IR_ROM_SLOT_SIZE);
+    blank.fill(0xff);
+    transport.irRom.set(blank, 7 * IR_ROM_SLOT_SIZE);
+    transport.openInputCount = 0;
+    transport.openOutputCount = 0;
 
-      const persist = await client.persistIrRom({
-        ...ports,
-        slotIndex: 7,
-        payload: sector,
-      });
-      expect(persist.verified).toBe(true);
-      expect(persist.writtenLength).toBe(IR_ROM_SLOT_SIZE);
-      expect(transport.openInputCount).toBe(1);
-      expect(transport.irRom.subarray(7 * IR_ROM_SLOT_SIZE, 8 * IR_ROM_SLOT_SIZE)).toEqual(sector);
-    },
-    20_000,
-  );
+    const persist = await client.persistIrRom({
+      ...ports,
+      slotIndex: 7,
+      payload: sector,
+    });
+    expect(persist.verified).toBe(true);
+    expect(persist.writtenLength).toBe(IR_ROM_SLOT_SIZE);
+    expect(transport.openInputCount).toBe(1);
+    expect(transport.irRom.subarray(7 * IR_ROM_SLOT_SIZE, 8 * IR_ROM_SLOT_SIZE)).toEqual(sector);
+  }, 20_000);
 });
 
 describe("CubeBabySession against FakeCubeBabyTransport", () => {
